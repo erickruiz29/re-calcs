@@ -14,23 +14,6 @@ const input2 = React.createRef<HTMLInputElement>();
 const input3 = React.createRef<HTMLInputElement>();
 const output = React.createRef<HTMLDivElement>();
 
-const submitFn = () => {
-    if (output.current !== null) {
-        output.current.innerText = ""
-        if (input1.current?.value.trim() === "") {
-            output.current.innerText += "Input 1 is empty\n"
-        }
-        if (input2.current?.value.trim() === "") {
-            output.current.innerText += "Input 2 is empty\n"
-        }
-        if (input3.current?.value.trim() === "") {
-            output.current.innerText += "Input 3 is empty\n"
-        }
-        if (output.current.innerText === "") {
-            output.current.innerText = `${input1.current?.value} ${input2.current?.value} ${input3.current?.value}`
-        }
-    }
-}
 
 const NnnCalculator: React.FC<Props> = ({ calcName }) => (
     <Container section>
@@ -47,5 +30,42 @@ const NnnCalculator: React.FC<Props> = ({ calcName }) => (
         </Styled.Content>
     </Container>
 );
+
+const addInputListenerOnce = (refObj: React.RefObject<HTMLInputElement>) => {
+    if (refObj.current !== null)
+    {
+        if (refObj.current.oninput === null) {
+            refObj.current.oninput = () => { 
+                submitFn();
+            }
+        }
+    }
+}
+
+
+const submitFn = () => {
+
+    addInputListenerOnce(input1);
+    addInputListenerOnce(input2);
+    addInputListenerOnce(input3);
+
+    
+
+    if (output.current !== null) {
+        output.current.innerText = ""
+        if (input1.current?.value.trim() === "") {
+            output.current.innerText += "Input 1 is empty\n"
+        }
+        if (input2.current?.value.trim() === "") {
+            output.current.innerText += "Input 2 is empty\n"
+        }
+        if (input3.current?.value.trim() === "") {
+            output.current.innerText += "Input 3 is empty\n"
+        }
+        if (output.current.innerText === "") {
+            output.current.innerText = `${input1.current?.value} ${input2.current?.value} ${input3.current?.value}`
+        }
+    }
+}
 
 export default NnnCalculator;
