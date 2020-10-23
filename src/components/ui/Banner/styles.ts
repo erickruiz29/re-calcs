@@ -8,3 +8,7 @@ export const Banner = styled.section`
 export const Content = styled.p`
   ${tw`mb-8`};
 `;
+
+export const Input = styled.input`
+  ${tw `border py-2 px-3 text-grey-darkest`};
+`;
