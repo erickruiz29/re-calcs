@@ -22,8 +22,9 @@ enum RentEntryFreq {
 }
 
 enum RentType {
-    perSqFt = "Per Square Foot",
-    perMonth = "A Month"
+    perSqFt = "$/Sq.Ft.",
+    perMonth = "$/Month",
+    perSqMeter = "$/Sq.Meter",
 }
 
 enum EscalationType {
@@ -58,9 +59,9 @@ class BuildingDimensions implements InputClassObj {
 }
 
 class RentFacts implements InputClassObj {
-    leaseStartDate?: Date = new Date() // TODO implement date selector
-    initialRent: InputElObj = new InputElObj("Initial Rent", "initialRent", "12");
     rentType: RentType = RentType.perSqFt
+    leaseStartDate?: Date = new Date() // TODO implement date selector
+    initialRent: InputElObj = new InputElObj(`Initial Rent (${this.rentType})`, "initialRent", "1.00");
     escalationFreqInMonths: InputElObj = new InputElObj("Escalation Frequency In Months", "escalationFreqInMonths", "12");
     escalationAmt: InputElObj = new InputElObj("Escalation Amount", "escalationAmt", "0.3");
     escalationType: EscalationType = EscalationType.percentage
