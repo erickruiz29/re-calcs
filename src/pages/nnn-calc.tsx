@@ -2,8 +2,7 @@ import React from 'react';
 
 import Layout from 'components/Layout';
 import SEO from 'components/SEO';
-import HeroBanner from 'components/HeroBanner';
-import NnnCalculator from "../components/NnnCalculator";
+import {NnnCalculator} from "../components/NnnCalculator";
 
 const IndexPage: React.FC = () => {
   return (
