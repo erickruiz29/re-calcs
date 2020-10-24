@@ -102,6 +102,21 @@ interface CalculatorInputs {
     tia: TenantImprovementAllowance
 }
 
+/*const getJsxFromObject = (obj: Object): JSX.Element {
+    let jsx = (<> </>)
+    for (const key in Object.keys(obj)) {
+        getElementFromVar(key, obj[key])
+    }
+}
+
+const getElementFromVar = (name: string, part: Object): JSX.Element {
+    switch (typeof part) {
+        case "number":
+            return <TextInput labelText={} inputGroupSize={}
+            break;
+    }
+}*/
+
 // Adding this as an example of how to create a class component
 export class NnnCalculator extends React.PureComponent {
     private input1 = React.createRef<HTMLInputElement>();
