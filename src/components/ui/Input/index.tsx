@@ -8,6 +8,8 @@ interface Props {
     inputGroupSize: InputGroupType
     type: string
     placeholder: string
+    id: string
+    onChange: () => void
 }
 
 interface WrapperProps {
@@ -20,11 +22,5 @@ export const InputWrapper: React.FC<WrapperProps> = ({children}) => (
     </Styled.InputWrapper>
 )
 
-export const InputLabelGroup: React.FC<Props> = ({labelText, inputRef, inputGroupSize, type, placeholder }) => (
-    <Styled.InputGroup inputGroupType={inputGroupSize}>
-        <Styled.Label>
-            {labelText}
-        </Styled.Label>
-        <Styled.Input type={type} ref={inputRef} placeholder={placeholder}/>
-    </Styled.InputGroup>
-);
+//export const InputLabelGroup: React.FC<Props> = ({labelText, inputRef, inputGroupSize, type, placeholder, onChange }) => (
+//);

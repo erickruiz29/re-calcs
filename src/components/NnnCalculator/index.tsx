@@ -1,9 +1,8 @@
 import React from 'react';
+import * as Styled from "../ui/Input/styles";
 import {Content, InputGroupType, InputWrapper} from "../ui/Input/styles";
 import {ObjectType} from "../../helpers/definitions";
-import {InputLabelGroup} from "../ui/Input";
 import {Container} from "../ui/Container/styles";
-import * as Styled from '../ui/Input/styles'
 import {Button} from "../ui/Button/styles";
 import TitleSection from "../ui/TitleSection";
 import {Link} from "gatsby";
@@ -12,18 +11,6 @@ interface Props {
     calcName: string;
 }
 
-/* This is commented out because it will be for future use, but adding in now for visibility
-interface ExcelTabs {
-    basicInfo: BasicInfo
-    baseRent: BaseRent
-    rentIncentives: RentIncentives
-    rentTable: rentTable
-    expenses: Expenses
-    commissions: Commissions
-    tenantImprovementAllowance: TenantImprovementAllowance
-    leaseAnalysis: leaseAnalysis
-}
- */
 enum BuildingSizeUnit {
     squareFeet = "Square Feet",
     squareMeters = "Square Meters"
@@ -61,89 +48,149 @@ enum IncentiveType {
     discount = "Discount"
 }
 
-class BuildingDimensions {
-    totalSize: number = 1000
-    rentedSize: number = 1000
+class InputClassObj {
+}
+
+class BuildingDimensions implements InputClassObj {
     unitSelect: BuildingSizeUnit = BuildingSizeUnit.squareFeet
+    totalSize: InputElObj = new InputElObj(`Size of Property (${this.unitSelect})`, "totalSize", "10000");
+    rentedSize: InputElObj = new InputElObj(`Amount Renting (${this.unitSelect})`, "rentedSize", "1000");
 }
 
-class RentFacts {
-    leaseStartDate?: Date = new Date()
-    startRent: number = 0
-    startRentType: RentType = RentType.perSqFt
-    escalationFreqInMonths: number = 12
-    escalationAmt: number = 0.3
+class RentFacts implements InputClassObj {
+    leaseStartDate?: Date = new Date() // TODO implement date selector
+    initialRent: InputElObj = new InputElObj("Initial Rent", "initialRent", "12");
+    rentType: RentType = RentType.perSqFt
+    escalationFreqInMonths: InputElObj = new InputElObj("Escalation Frequency In Months", "escalationFreqInMonths", "12");
+    escalationAmt: InputElObj = new InputElObj("Escalation Amount", "escalationAmt", "0.3");
     escalationType: EscalationType = EscalationType.percentage
-    termLengthInMonths: number = 12
+    termLengthInMonths: InputElObj = new InputElObj("Term Length In Months", "termLengthInMonths", "12");
 }
 
-class Incentives {
-    incentiveType: IncentiveType = IncentiveType.freeRent;
-    discountPercent: number = 0.0
-    discountMonths: number = 0
-    escalationOption: EscalationOption = EscalationOption.option1
+class Incentives implements InputClassObj {
+    incentiveType: IncentiveType = IncentiveType.freeRent; // TODO implement dropdown
+    discountPercent: InputElObj = new InputElObj("Discount Percent", "discountPercent", "100");
+    discountLength: InputElObj = new InputElObj("Discount Length", "discountLength", "1");
+    escalationOption: EscalationOption = EscalationOption.option1 // TODO implement dropdown
 }
 
-class Commissions {
-    listingCommision: number = 0.0
-    procuringCommission: number = 0.0
+class Commissions implements InputClassObj {
+    listingCommision: InputElObj = new InputElObj("Listing Commission", "listingCommission", "2.5");
+    procuringCommission: InputElObj = new InputElObj("Procuring Commission", "procuringCommission", "2.5");
 }
 
-class TenantImprovementAllowance {
+class TenantImprovementAllowance implements InputClassObj {
     tiaType: TIAType = TIAType.perSqFt
-    tiaAmount: number = 0
+    tia: InputElObj = new InputElObj(`Tenant Improvement Allowance (${this.tiaType})`, "tia", "5.00");
 }
 
 class CalculatorInputs {
-    bldgDims = new BuildingDimensions()
+    bldgDims: InputClassObj = new BuildingDimensions()
     rentEntryFreq = RentEntryFreq.monthly
-    rentFacts = new RentFacts()
-    incentives = new Incentives()
-    commissions = new Commissions()
-    tia = new TenantImprovementAllowance()
+    rentFacts: InputClassObj = new RentFacts()
+    incentives: InputClassObj = new Incentives()
+    commissions: InputClassObj= new Commissions()
+    tia: InputClassObj = new TenantImprovementAllowance()
 }
 
-const getJsxFromObject = (obj: ObjectType): JSX.Element => {
+enum InputType {
+    text = "text",
+    select = "select",
+    slider = "slider"
+}
+
+class InputElObj  {
+    displayName: string = ""
+    id: string = ""
+    inputType: InputType = InputType.text
+    validationFn: () => void = () => {}
+    placeholder: string = ""
+    defaultValue: string = ""
+    inputSize: InputGroupType = InputGroupType.half
+    inputRef: React.RefObject<HTMLInputElement> | null = null
+
+    constructor(displayName: string, id:string, defaultValue?: string, placeholder?: string, inputType?: InputType, inputSize?: InputGroupType, inputRef?: React.RefObject<HTMLInputElement>) {
+        this.displayName = displayName;
+        this.id = id;
+        this.defaultValue = defaultValue !== undefined ? defaultValue : this.defaultValue;
+        this.inputType = inputType !== undefined ? inputType : this.inputType;
+        this.placeholder = placeholder !== undefined ? placeholder : this.placeholder;
+        this.inputSize = inputSize !== undefined ? inputSize : this.inputSize;
+        this.inputRef = inputRef !== undefined ? inputRef : this.inputRef;
+    }
+}
+
+class InputGroup extends React.PureComponent {
+    private placeholder: string;
+    private defaultValue: string;
+    private displayName: string;
+    private id: string;
+    private inputType: InputType;
+    private inputSize: InputGroupType;
+    private inputRef: React.RefObject<HTMLInputElement> | null;
+
+    constructor(props: InputElObj) {
+        super(props);
+        this.displayName = props.displayName
+        this.id = props.id
+        this.inputType = props.inputType
+        this.validationFn = props.validationFn
+        this.placeholder = props.placeholder
+        this.defaultValue = props.defaultValue
+        this.inputSize = props.inputSize !== undefined ? props.inputSize : InputGroupType.full
+        this.inputRef = props.inputRef
+    }
+
+    validationFn(): void {}
+
+    render(): React.ReactNode {
+        return (
+            <Styled.InputGroup inputGroupType={this.inputSize}>
+                <Styled.Label>
+                    {this.displayName}
+                </Styled.Label>
+                <Styled.Input id={this.id} type={this.inputType} ref={this.inputRef} placeholder={this.placeholder} onChange={() => {this.validationFn()}} value={this.defaultValue} />
+            </Styled.InputGroup>
+        );
+    }
+}
+
+const getInputJsxFromObject = (obj: InputClassObj | InputElObj | ObjectType): JSX.Element[] => {
     const buffer:JSX.Element[] = [];
 
-    for (var prop in obj) {
-        if (obj.hasOwnProperty(prop)) {
-            const el = getElementFromVar(prop, obj[prop])
-            if (el !== null) {
-                buffer.push(el);
+    for (let val of Object.values(obj)) {
+        if ((val as InputElObj).displayName !== undefined) {
+            buffer.push(getInputJsx(val as InputElObj));
+        } else {
+            let inputObj: InputClassObj | undefined = undefined
+
+            try {
+                inputObj = val as InputClassObj
+            } catch (e) {}
+
+            if (inputObj !== undefined && typeof(inputObj) === "object") {
+                buffer.push(...getInputJsxFromObject(inputObj));
             }
         }
     }
 
-    return (<>{buffer}</>);
+    return (buffer);
 }
 
-const getElementFromVar = (name: string, part: Object | undefined): JSX.Element | null => {
-    console.log(`${name}: ${part}`)
-    if (part === undefined) {
-        return null;
-    }
-    switch (typeof part) {
-        case "number":
-            return (<InputLabelGroup labelText={name} inputGroupSize={InputGroupType.half} type={"text"} placeholder={(part as number).toString()}></InputLabelGroup>)
-        case "string":
-            return (<InputLabelGroup labelText={name} inputGroupSize={InputGroupType.half} type={"text"} placeholder={part as string}></InputLabelGroup>);
-        case "object":
-            return getJsxFromObject(part);
-    }
-    return null;
+const getInputJsx = (props: InputElObj): JSX.Element => {
+    return (<InputGroup key={`inputGroup_${props.id}`} {...props}/>)
 }
 
 // Adding this as an example of how to create a class component
 export class NnnCalculator extends React.PureComponent {
     private output = React.createRef<HTMLDivElement>();
     private element: JSX.Element;
-    private inputs: JSX.Element;
+    private inputs: JSX.Element[];
 
     constructor(public props: Props) {
         super(props);
         const calcInputs = new CalculatorInputs()
-        this.inputs = getJsxFromObject(calcInputs);
+        this.inputs = getInputJsxFromObject(calcInputs);
 
         this.element = (<Container section={false}>
             <TitleSection title={"Real Estate Calculator"} subtitle={this.props.calcName} />
