@@ -1,11 +1,12 @@
 import React from 'react';
+import {Content, InputGroupType, InputWrapper} from "../ui/Input/styles";
+import {ObjectType} from "../../helpers/definitions";
+import {InputLabelGroup} from "../ui/Input";
+import {Container} from "../ui/Container/styles";
+import * as Styled from '../ui/Input/styles'
+import {Button} from "../ui/Button/styles";
 import TitleSection from "../ui/TitleSection";
-import * as Styled from "../ui/Input/styles";
-import {InputGroupType, InputWrapper} from "../ui/Input/styles";
-import Container from "../ui/Container";
-import Button from "../ui/Button";
 import {Link} from "gatsby";
-import TextInput from "../ui/Input";
 
 interface Props {
     calcName: string;
@@ -24,28 +25,28 @@ interface ExcelTabs {
 }
  */
 enum BuildingSizeUnit {
-    squareFeet = 0,
-    squareMeters = 1
+    squareFeet = "Square Feet",
+    squareMeters = "Square Meters"
 }
 
 enum RentEntryFreq {
-    monthly = 0,
-    yearly = 1
+    monthly = "Monthly",
+    yearly = "Yearly"
 }
 
 enum RentType {
-    perSqFt = 0,
-    perMonth = 1
+    perSqFt = "Per Square Foot",
+    perMonth = "A Month"
 }
 
 enum EscalationType {
-    percentage,
-    fixed
+    percentage= "Percentage",
+    fixed = "Fixed"
 }
 
 enum TIAType {
-    perSqFt,
-    fixed
+    perSqFt= "Per Square Foot",
+    fixed = "Dollar Amount"
 }
 
 // TODO Needs better naming/description for options
@@ -56,94 +57,106 @@ enum EscalationOption {
 }
 
 enum IncentiveType {
-    freeRent,
-    discount
+    freeRent = "Free Rent",
+    discount = "Discount"
 }
 
-interface BuildingDimensions {
-    totalSize: number
-    rentedSize: number
-    unitSelect: BuildingSizeUnit
+class BuildingDimensions {
+    totalSize: number = 1000
+    rentedSize: number = 1000
+    unitSelect: BuildingSizeUnit = BuildingSizeUnit.squareFeet
 }
 
-interface RentFacts {
-    leaseStartDate?: Date
-    startRent: number
-    startRentType: RentType
-    escalationFreqInMonths: number
-    escalationAmt: number
-    escalationType: EscalationType
-    termLengthInMonths: number
+class RentFacts {
+    leaseStartDate?: Date = new Date()
+    startRent: number = 0
+    startRentType: RentType = RentType.perSqFt
+    escalationFreqInMonths: number = 12
+    escalationAmt: number = 0.3
+    escalationType: EscalationType = EscalationType.percentage
+    termLengthInMonths: number = 12
 }
 
-interface Incentives {
-    incentiveType: IncentiveType
-    discountPercent: number
-    discountMonths: number
-    escalationOption: EscalationOption
+class Incentives {
+    incentiveType: IncentiveType = IncentiveType.freeRent;
+    discountPercent: number = 0.0
+    discountMonths: number = 0
+    escalationOption: EscalationOption = EscalationOption.option1
 }
 
-interface Commissions {
-    listingCommision: number
-    procuringCommission: number
+class Commissions {
+    listingCommision: number = 0.0
+    procuringCommission: number = 0.0
 }
 
-interface TenantImprovementAllowance {
-    tiaType: TIAType
-    tiaAmount: number
+class TenantImprovementAllowance {
+    tiaType: TIAType = TIAType.perSqFt
+    tiaAmount: number = 0
 }
 
-interface CalculatorInputs {
-    bldgDims: BuildingDimensions
-    rentEntryFreq: RentEntryFreq
-    rentFacts: RentFacts
-    incentives: Incentives
-    commissions: Commissions
-    tia: TenantImprovementAllowance
+class CalculatorInputs {
+    bldgDims = new BuildingDimensions()
+    rentEntryFreq = RentEntryFreq.monthly
+    rentFacts = new RentFacts()
+    incentives = new Incentives()
+    commissions = new Commissions()
+    tia = new TenantImprovementAllowance()
 }
 
-/*const getJsxFromObject = (obj: Object): JSX.Element {
-    let jsx = (<> </>)
-    for (const key in Object.keys(obj)) {
-        getElementFromVar(key, obj[key])
+const getJsxFromObject = (obj: ObjectType): JSX.Element => {
+    const buffer:JSX.Element[] = [];
+
+    for (var prop in obj) {
+        if (obj.hasOwnProperty(prop)) {
+            const el = getElementFromVar(prop, obj[prop])
+            if (el !== null) {
+                buffer.push(el);
+            }
+        }
     }
+
+    return (<>{buffer}</>);
 }
 
-const getElementFromVar = (name: string, part: Object): JSX.Element {
+const getElementFromVar = (name: string, part: Object | undefined): JSX.Element | null => {
+    console.log(`${name}: ${part}`)
+    if (part === undefined) {
+        return null;
+    }
     switch (typeof part) {
         case "number":
-            return <TextInput labelText={} inputGroupSize={}
-            break;
+            return (<InputLabelGroup labelText={name} inputGroupSize={InputGroupType.half} type={"text"} placeholder={(part as number).toString()}></InputLabelGroup>)
+        case "string":
+            return (<InputLabelGroup labelText={name} inputGroupSize={InputGroupType.half} type={"text"} placeholder={part as string}></InputLabelGroup>);
+        case "object":
+            return getJsxFromObject(part);
     }
-}*/
+    return null;
+}
 
 // Adding this as an example of how to create a class component
 export class NnnCalculator extends React.PureComponent {
-    private input1 = React.createRef<HTMLInputElement>();
-    private input2 = React.createRef<HTMLInputElement>();
-    private input3 = React.createRef<HTMLInputElement>();
-    private input4 = React.createRef<HTMLInputElement>();
     private output = React.createRef<HTMLDivElement>();
     private element: JSX.Element;
+    private inputs: JSX.Element;
 
     constructor(public props: Props) {
         super(props);
+        const calcInputs = new CalculatorInputs()
+        this.inputs = getJsxFromObject(calcInputs);
 
         this.element = (<Container section={false}>
             <TitleSection title={"Real Estate Calculator"} subtitle={this.props.calcName} />
-            <Styled.Content>
+            <Content>
                 <InputWrapper>
-                    <TextInput labelText={"First Input"} inputRef={this.input1} inputGroupSize={InputGroupType.half}> </TextInput>
-                    <TextInput labelText={"Second Input"} inputRef={this.input2} inputGroupSize={InputGroupType.half}> </TextInput>
-                    <TextInput labelText={"Third Input"} inputRef={this.input3} inputGroupSize={InputGroupType.half}> </TextInput>
-                    <TextInput labelText={"Fourth Input"} inputRef={this.input4} inputGroupSize={InputGroupType.half}> </TextInput>
+                    {this.inputs}
                 </InputWrapper>
                 <span ref={this.output} style={{display: "block"}}> </span>
 
                 <Link to={"#"} onClick={(ev) => { ev.preventDefault(); this.submitFn() }}>
                     <Button primary>{"Calculator"}</Button>
                 </Link>
-            </Styled.Content>
+            </Content>
         </Container>);
     }
 
@@ -154,33 +167,14 @@ export class NnnCalculator extends React.PureComponent {
     }
 
     addOnInputListener(ref: React.RefObject<HTMLInputElement>): void {
-        if (ref.current !== null && ref.current.oninput === null) {
-            ref.current.oninput = () => { this.submitFn() }
-        }
     }
 
     init(): void {
-        this.addOnInputListener(this.input1)
-        this.addOnInputListener(this.input2)
-        this.addOnInputListener(this.input3)
-        this.addOnInputListener(this.input4)
     }
 
     submitFn = () => {
         if (this.output.current !== null) {
             this.output.current.innerText = ""
-            if (this.input1.current?.value.trim() === "") {
-                this.output.current.innerText += "Input 1 is empty\n"
-            }
-            if (this.input2.current?.value.trim() === "") {
-                this.output.current.innerText += "Input 2 is empty\n"
-            }
-            if (this.input3.current?.value.trim() === "") {
-                this.output.current.innerText += "Input 3 is empty\n"
-            }
-            if (this.output.current.innerText === "") {
-                this.output.current.innerText = `${this.input1.current?.value} ${this.input2.current?.value} ${this.input3.current?.value}`
-            }
         }
     }
 

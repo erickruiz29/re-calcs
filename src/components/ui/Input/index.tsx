@@ -6,25 +6,25 @@ interface Props {
     labelText: string
     inputRef?: React.RefObject<HTMLInputElement>
     inputGroupSize: InputGroupType
+    type: string
+    placeholder: string
 }
 
 interface WrapperProps {
     children: React.ReactNode
 }
 
-const InputWrapper: React.FC<WrapperProps> = ({children}) => (
+export const InputWrapper: React.FC<WrapperProps> = ({children}) => (
     <Styled.InputWrapper>
         {children}
     </Styled.InputWrapper>
 )
 
-const TextInput: React.FC<Props> = ({labelText, inputRef, inputGroupSize }) => (
+export const InputLabelGroup: React.FC<Props> = ({labelText, inputRef, inputGroupSize, type, placeholder }) => (
     <Styled.InputGroup inputGroupType={inputGroupSize}>
         <Styled.Label>
             {labelText}
         </Styled.Label>
-        <Styled.Input type={"text"} ref={inputRef}/>
+        <Styled.Input type={type} ref={inputRef} placeholder={placeholder}/>
     </Styled.InputGroup>
 );
-
-export default TextInput;
