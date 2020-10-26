@@ -86,6 +86,11 @@ class NnnCalculatorInputs {
     discountPercent: InputElObj = new InputElObj("Discount Percent", "discountPercent", "100");
     discountLength: InputElObj = new InputElObj("Discount Length", "discountLength", "1");
     escalationOption: EscalationOption = EscalationOption.option1 // TODO implement dropdown
+    // TODO get units for Expenses
+    managementFeePercentage: InputElObj = new InputElObj("Management Fee Percentage", "managementFeePercentage", "1.03");
+    commonAreaMaintenance: InputElObj = new InputElObj("Common Area Maintenance", "commonAreaMaintenance", "40000");
+    insurance: InputElObj = new InputElObj("Insurance", "insurance", "30000");
+    taxes: InputElObj = new InputElObj("Taxes", "taxes", "60000");
     listingCommision: InputElObj = new InputElObj("Listing Commission", "listingCommission", "2.5");
     procuringCommission: InputElObj = new InputElObj("Procuring Commission", "procuringCommission", "2.5");
     tiaType: TIAType = TIAType.perSqFt
@@ -103,8 +108,8 @@ class NnnCalculatorInputs {
             curData.periodFrom = 1
             curData.periodTo = parseInt(this.discountLength.getValue())
             curData.monthsLength = curData.periodFrom - curData.periodTo + 1
-            curData.monthlyBaseRent = parseInt(this.initialRent.getValue());
             curData.monthlyRentPerSqFt = 0;
+            curData.monthlyBaseRent = 0;
             curData.totalRentPerPeriod = 0;
 
             data.push(curData);
@@ -291,28 +296,59 @@ export class NnnCalculator extends React.Component {
             totalRent += data.totalRentPerPeriod;
         })
         console.log(totalRent)
+
+        const percentRented = parseFloat(this.calcInputs.rentedSize.getValue()) / parseFloat(this.calcInputs.totalSize.getValue())
+        // Expenses calculation:
+        const cam = parseInt(this.calcInputs.commonAreaMaintenance.getValue());
+        const annualCam = cam * percentRented
+
+
         return (
-            <table style={{width: "100%"}}>
-                <tbody>
+            <>
+                <h1>Rent Table</h1>
+                <table style={{width: "100%"}}>
+                    <tbody>
+                        <tr>
+                            <td>Period From:</td>
+                            <td>Period To:</td>
+                            <td>Months Length:</td>
+                            <td>Monthly Rent Per SqFt:</td>
+                            <td>Monthly Base Rent:</td>
+                            <td>Total Rent Per Period:</td>
+                        </tr>
+                        {outText}
+                        <tr>
+                            <td>&nbsp;</td>
+                            <td>&nbsp;</td>
+                            <td>&nbsp;</td>
+                            <td>&nbsp;</td>
+                            <td>Total Rent for Term:</td>
+                            <td>{totalRent.toLocaleString("en-US", localeOptions)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <h1>Expenses</h1>
+                <table>
+                    <tbody>
                     <tr>
-                        <td>Period From:</td>
-                        <td>Period To:</td>
-                        <td>Months Length:</td>
-                        <td>Monthly Rent Per SqFt:</td>
-                        <td>Monthly Base Rent:</td>
-                        <td>Total Rent Per Period:</td>
+                        <th>Monthly Expenses</th>
+                        <th>Building/Project Annual Total</th>
+                        <th>Pro-Rata Annual Total</th>
+                        <th>Building/Project Monthly Total</th>
+                        <th>Pro-Rata Monthly Total</th>
+                        <th>Monthly Per Sq. Ft.</th>
                     </tr>
-                    {outText}
                     <tr>
-                        <td>&nbsp;</td>
-                        <td>&nbsp;</td>
-                        <td>&nbsp;</td>
-                        <td>&nbsp;</td>
-                        <td>Total Rent for Term:</td>
-                        <td>{totalRent.toLocaleString("en-US", localeOptions)}</td>
+                        <td>Common Area Maintenance (CAM)</td>
+                        <td>{cam.toLocaleString("en-US", localeOptions)}</td>
+                        <td>{annualCam.toLocaleString("en-US", localeOptions)}</td>
+                        <td>{(cam / 12.0).toLocaleString("en-US", localeOptions)}</td>
+                        <td>{((cam / 12.0) * percentRented).toLocaleString("en-US", localeOptions)}</td>
+                        <td>{((((cam / 12.0) * percentRented)) / parseFloat(this.calcInputs.rentedSize.getValue())).toLocaleString("en-US", localeOptions)}</td>
                     </tr>
-                </tbody>
-            </table>
+                    </tbody>
+                </table>
+            </>
         )
     }
 
