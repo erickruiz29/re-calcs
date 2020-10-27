@@ -5,10 +5,15 @@ import {Container} from "../ui/Container/styles";
 import {Button} from "../ui/Button/styles";
 import TitleSection from "../ui/TitleSection";
 import {Link} from "gatsby";
+import EventEmitter from "events";
 
-function typedKeys<T>(o: T): (keyof T)[] {
+export function typedKeys<T>(o: T): (keyof T)[] {
     // type cast should be safe because that's what really Object.keys() does
     return Object.keys(o) as (keyof T)[];
+}
+
+export function getStringOrEmpty(input: number | undefined): string {
+    return input?.toString() ?? "";
 }
 
 interface Props {
@@ -135,6 +140,8 @@ class InputGroup extends React.Component {
     private id: string;
     private value: string;
     private onUpdate: (ev:FormEvent<HTMLInputElement>) => string;
+    private min: string;
+    private max: string;
 
     constructor(props: InputGroupProps) {
         super(props);
@@ -142,6 +149,8 @@ class InputGroup extends React.Component {
         this.id = props.id
         this.value = props.stateValue
         this.onUpdate = props.onUpdate
+        this.min = props.min !== undefined ? props.min : ""
+        this.max = props.max !== undefined ? props.max : ""
     }
 
     render(): React.ReactNode {
@@ -150,7 +159,7 @@ class InputGroup extends React.Component {
                 <Styled.Label>
                     {this.displayName}
                 </Styled.Label>
-                <Styled.Input id={this.id} type={"text"} value={this.value} onChange={(ev: FormEvent<HTMLInputElement>) => { this.value = this.onUpdate(ev)}} />
+                <Styled.Input data-validation-min={this.min} data-validation-max={this.max} id={this.id} type={"text"} value={this.value} onChange={(ev: FormEvent<HTMLInputElement>) => { this.value = this.onUpdate(ev)}} />
             </Styled.InputGroup>
         );
     }
@@ -159,16 +168,58 @@ class InputGroup extends React.Component {
 interface NnnCalcState {
     preparedOutput: JSX.Element
     calcInputData: ICalcData
+    errors: InputError
 }
 
 interface calcInput {
     stateValue: string
     displayName: string
     id: string
+    max?: string
+    min?: string
 }
 
 interface InputGroupProps extends calcInput {
     onUpdate: (ev:FormEvent<HTMLInputElement>) => string
+}
+
+enum ErrorType {
+    minErr,
+    maxErr,
+    emptyErr,
+    intOnlyErr,
+}
+
+class InputError extends Map<string, Error[]> {}
+
+class Error {
+    errorMessage: string
+
+    constructor(private inputName: string, private value: string, private errorType?: ErrorType) {
+        this.errorMessage = this.getErrorMessage()
+    }
+
+    getErrorMessage(): string {
+        let errorPart = `${this.inputName} `
+        switch (this.errorType) {
+            case undefined:
+                errorPart += `has encountered an error!`
+                break;
+            case ErrorType.intOnlyErr:
+                errorPart += `only allows integers (no decimal)!`
+                break
+            case ErrorType.emptyErr:
+                errorPart += `cannot be empty!`
+                break
+            case ErrorType.maxErr:
+                errorPart += `value is above max value: ${this.value}`
+                break
+            case ErrorType.minErr:
+                errorPart += `value is below min value: ${this.value}`
+                break
+        }
+        return errorPart
+    }
 }
 
 // Adding this as an example of how to create a class component
@@ -182,24 +233,25 @@ export class NnnCalculator extends React.Component {
         this.state = {
             preparedOutput: <div>What the...</div>,
             calcInputData: new DefaultCalcData(),
+            errors: new InputError()
         }
 
         this.calcInputs = [
-            {stateValue: this.state.calcInputData.totalSize?.toString() ?? "", displayName: "Size of Property (TODOUNITSELECT)", id: "totalSize" },
-            {stateValue: this.state.calcInputData.rentedSize?.toString() ?? "", displayName: "Amount Renting (TODOUNITSELECT)", id: "rentedSize" },
-            {stateValue: this.state.calcInputData.initialRent?.toString() ?? "", displayName: "Initial Rent (TODOUNITSELECT)", id: "initialRent" },
-            {stateValue: this.state.calcInputData.escalationFreqInMonths?.toString() ?? "", displayName: "Escalation Frequency In Months", id: "escalationFreqInMonths" },
-            {stateValue: this.state.calcInputData.escalationAmt?.toString() ?? "", displayName: "Escalation Amount", id: "escalationAmt" },
-            {stateValue: this.state.calcInputData.termLengthInMonths?.toString() ?? "", displayName: "Term Length In Months", id: "termLengthInMonths" },
-            {stateValue: this.state.calcInputData.discountPercent?.toString() ?? "", displayName: "Discount Percent", id: "discountPercent" },
-            {stateValue: this.state.calcInputData.discountLength?.toString() ?? "", displayName: "Discount Length", id: "discountLength" },
-            {stateValue: this.state.calcInputData.managementFeePercentage?.toString() ?? "", displayName: "Management Fee Percentage", id: "managementFeePercentage" },
-            {stateValue: this.state.calcInputData.commonAreaMaintenance?.toString() ?? "", displayName: "Common Area Maintenance", id: "commonAreaMaintenance" },
-            {stateValue: this.state.calcInputData.insurance?.toString() ?? "", displayName: "Insurance", id: "insurance" },
-            {stateValue: this.state.calcInputData.taxes?.toString() ?? "", displayName: "Taxes", id: "taxes" },
-            {stateValue: this.state.calcInputData.listingCommission?.toString() ?? "", displayName: "Listing Commission", id: "listingCommission" },
-            {stateValue: this.state.calcInputData.procuringCommission?.toString() ?? "", displayName: "Procuring Commission", id: "procuringCommission" },
-            {stateValue: this.state.calcInputData.tia?.toString() ?? "", displayName: "Tenant Improvement Allowance (TODOUNITSELECT)", id: "tia" },
+            {stateValue: getStringOrEmpty(this.state.calcInputData.totalSize), displayName: "Size of Property (TODOUNITSELECT)", id: "totalSize", min: "0", max: "100000000" },
+            {stateValue: getStringOrEmpty(this.state.calcInputData.rentedSize), displayName: "Amount Renting (TODOUNITSELECT)", id: "rentedSize", min: "0", max: `${this.state.calcInputData.totalSize}` },
+            {stateValue: getStringOrEmpty(this.state.calcInputData.initialRent), displayName: "Initial Rent (TODOUNITSELECT)", id: "initialRent", min: "1", max: "100000000" },
+            {stateValue: getStringOrEmpty(this.state.calcInputData.escalationFreqInMonths), displayName: "Escalation Frequency In Months", id: "escalationFreqInMonths", min: "1", max: `${this.state.calcInputData.termLengthInMonths}` },
+            {stateValue: getStringOrEmpty(this.state.calcInputData.escalationAmt), displayName: "Escalation Amount", id: "escalationAmt", min: "0"}, // TODO find max
+            {stateValue: getStringOrEmpty(this.state.calcInputData.termLengthInMonths), displayName: "Term Length In Months", id: "termLengthInMonths", min: "1" },
+            {stateValue: getStringOrEmpty(this.state.calcInputData.discountPercent), displayName: "Discount Percent", id: "discountPercent", min: "1", max: "100" },
+            {stateValue: getStringOrEmpty(this.state.calcInputData.discountLength), displayName: "Discount Length", id: "discountLength", min: "1", max: `${this.state.calcInputData.termLengthInMonths}` },
+            {stateValue: getStringOrEmpty(this.state.calcInputData.managementFeePercentage), displayName: "Management Fee Percentage", id: "managementFeePercentage", min: "0", max: "100" },
+            {stateValue: getStringOrEmpty(this.state.calcInputData.commonAreaMaintenance), displayName: "Common Area Maintenance", id: "commonAreaMaintenance", min: "0", max: "100" },
+            {stateValue: getStringOrEmpty(this.state.calcInputData.insurance), displayName: "Insurance", id: "insurance", min: "0" },
+            {stateValue: getStringOrEmpty(this.state.calcInputData.taxes), displayName: "Taxes", id: "taxes", min: "0"},
+            {stateValue: getStringOrEmpty(this.state.calcInputData.listingCommission), displayName: "Listing Commission", id: "listingCommission", min: "0", max: "100" },
+            {stateValue: getStringOrEmpty(this.state.calcInputData.procuringCommission), displayName: "Procuring Commission", id: "procuringCommission", min: "0", max: "100" },
+            {stateValue: getStringOrEmpty(this.state.calcInputData.tia), displayName: "Tenant Improvement Allowance (TODOUNITSELECT)", id: "tia", min: "0" },
         ]
     }
 
@@ -209,14 +261,30 @@ export class NnnCalculator extends React.Component {
         this.setState({ preparedOutput: <>Wah</> })
     }
 
-    validateInputs(val: string, min?: number, max?: number): number | undefined {
-        if (val.trim() !== "") {
+    // TODO have ErrorClass return value
+    validateInput(target: EventTarget & HTMLInputElement, min?: number, max?: number): number | Error[] | undefined {
+        let errors: Error[] = [];
+        const val = target.value.trim()
+        if (val !== "") {
             try {
                 const retVal = parseFloat(val);
-                return isNaN(retVal) ? undefined : retVal;
+
+                if (isNaN(retVal)) {
+                    errors.push(new Error(target.id, "", ErrorType.intOnlyErr));
+                }
+                if (min !== undefined && min > retVal) {
+                    errors.push(new Error(target.id, min.toString(), ErrorType.minErr))
+                }
+
+                if (max !== undefined && max < retVal) {
+                    errors.push(new Error(target.id, max.toString(), ErrorType.maxErr));
+                }
+
+                return errors.length > 0 ? errors : retVal;
             } catch (e) {}
         }
-        return undefined;
+        errors.push(new Error(target.id, "", ErrorType.emptyErr));
+        return errors;
     }
 
     getUpdatedInputCalcData(key: string, val: number | undefined): ICalcData {
@@ -246,18 +314,66 @@ export class NnnCalculator extends React.Component {
         }
     }
 
-    validateInputsUpdateState(ev: FormEvent<HTMLInputElement>): string {
-        const num = this.validateInputs(ev.currentTarget.value.trim());
-        const updatedCalcData = this.getUpdatedInputCalcData(ev.currentTarget.id, num);
-        const updateState = {...this.state, calcInputData: {...updatedCalcData}}
+    getErrorOutput(error: InputError): JSX.Element {
+        let errors:Error[] = [];
+            error.forEach((val) => {
+                val.forEach((err) => {
+                    errors.push(err);
+                })
+            })
+        return errors.length > 0 ? (<div>
+            Please fix the following errors:
+            <ul style={{listStyle: "inside"}}>
+                {
+                    errors.map((err) => {
+                        return <li key={err.getErrorMessage()} style={{color: "red"}}>{err.getErrorMessage()}</li>
+                    })
+                }
+            </ul>
+        </div>) : <></>;
+    }
+
+    getValidationAttrOrUndefined(target: HTMLInputElement, validationAttrName: string): number | undefined {
+        const attr = target.attributes.getNamedItem(validationAttrName)
+        return attr !== null ? parseInt(attr.value) : undefined
+    }
+
+    validateInputsUpdateState(currentTarget: HTMLInputElement): string {
+        const validationMin = this.getValidationAttrOrUndefined(currentTarget, "data-validation-min")
+        const validationMax = this.getValidationAttrOrUndefined(currentTarget, "data-validation-max")
+        const numOrError = this.validateInput(currentTarget, validationMin, validationMax);
+        let updatedCalcData = {...this.state.calcInputData}
+        let errorOutput = <></>
+        let errors: InputError = new InputError(this.state.errors)
+
+        if (numOrError instanceof Array) {
+            errors.set(currentTarget.id, numOrError)
+        } else {
+            updatedCalcData = this.getUpdatedInputCalcData(currentTarget.id, numOrError);
+        }
+
+        errorOutput = this.getErrorOutput(errors);
+
+        const updateState = {...this.state, calcInputData: {...updatedCalcData}, errors: errors, preparedOutput: errorOutput}
         this.setState(updateState);
-        return num !== undefined ? num.toString() : "";
+
+        return (numOrError instanceof Array) ? currentTarget.value : numOrError !== undefined ? numOrError.toString() : "";
     }
 
     submitFn = () => {
-        this.prepareOutput().then((val) => {
-            this.setState({preparedOutput: val});
-        });
+        const inputs = document.querySelectorAll("input")
+
+        inputs.forEach((input) => {
+            this.validateInputsUpdateState(input);
+        })
+
+        if (this.state.errors.size > 0) {
+            this.setState({...this.state, calcInputData: {...this.state.calcInputData}, errors: this.state.errors, preparedOutput: this.getErrorOutput(this.state.errors)});
+        } else {
+            this.prepareOutput().then((val) => {
+                this.setState({...this.state, calcInputData: {...this.state.calcInputData}, errors: this.state.errors, preparedOutput: val});
+            });
+        }
     }
 
     // Need render function in order for class component to work
@@ -268,7 +384,7 @@ export class NnnCalculator extends React.Component {
                 <InputWrapper>
                     {
                         this.calcInputs.map((props: calcInput) => {
-                            const inputProps: InputGroupProps = {...props, onUpdate: this.validateInputsUpdateState}
+                            const inputProps: InputGroupProps = {...props, onUpdate: (ev: FormEvent<HTMLInputElement>) => { return this.validateInputsUpdateState(ev.currentTarget) }}
                             return (<InputGroup key={inputProps.id} {...inputProps} />)
                         })
                     }
