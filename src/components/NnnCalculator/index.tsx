@@ -169,6 +169,7 @@ interface NnnCalcState {
     preparedOutput: JSX.Element
     calcInputData: ICalcData
     errors: InputError
+    errorOutput: JSX.Element
 }
 
 interface calcInput {
@@ -233,7 +234,8 @@ export class NnnCalculator extends React.Component {
         this.state = {
             preparedOutput: <div>What the...</div>,
             calcInputData: new DefaultCalcData(),
-            errors: new InputError()
+            errors: new InputError(),
+            errorOutput: <div></div>
         }
 
         this.calcInputs = [
@@ -354,7 +356,7 @@ export class NnnCalculator extends React.Component {
 
         errorOutput = this.getErrorOutput(errors);
 
-        const updateState = {...this.state, calcInputData: {...updatedCalcData}, errors: errors, preparedOutput: errorOutput}
+        const updateState = {...this.state, calcInputData: {...updatedCalcData}, errors: errors, errorOutput: errorOutput}
         this.setState(updateState);
 
         return (numOrError instanceof Array) ? currentTarget.value : numOrError !== undefined ? numOrError.toString() : "";
@@ -368,7 +370,7 @@ export class NnnCalculator extends React.Component {
         })
 
         if (this.state.errors.size > 0) {
-            this.setState({...this.state, calcInputData: {...this.state.calcInputData}, errors: this.state.errors, preparedOutput: this.getErrorOutput(this.state.errors)});
+            this.setState({...this.state, calcInputData: {...this.state.calcInputData}, errors: this.state.errors, errorOutput: this.getErrorOutput(this.state.errors)});
         } else {
             this.prepareOutput().then((val) => {
                 this.setState({...this.state, calcInputData: {...this.state.calcInputData}, errors: this.state.errors, preparedOutput: val});
@@ -381,6 +383,9 @@ export class NnnCalculator extends React.Component {
         return (<Container section={false}>
             <TitleSection title={"Real Estate Calculator"} subtitle={this.props.calcName} />
             <Content>
+                <div style={{marginBottom: "20px"}}>
+                    <span style={{display: "block"}}>{this.state.errorOutput}</span>
+                </div>
                 <InputWrapper>
                     {
                         this.calcInputs.map((props: calcInput) => {
@@ -394,7 +399,7 @@ export class NnnCalculator extends React.Component {
                     <Button primary>{"Calculator"}</Button>
                 </Link>
 
-                <span ref={this.output} style={{display: "block"}}>{this.state.preparedOutput}</span>
+                <span style={{display: "block"}}>{this.state.preparedOutput}</span>
             </Content>
         </Container>)
     }
