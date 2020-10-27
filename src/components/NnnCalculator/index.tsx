@@ -1,11 +1,15 @@
-import React, {FormEvent, useState} from 'react';
+import React, {FormEvent} from 'react';
 import * as Styled from "../ui/Input/styles";
 import {Content, InputGroupType, InputWrapper} from "../ui/Input/styles";
-import {ObjectType} from "../../helpers/definitions";
 import {Container} from "../ui/Container/styles";
 import {Button} from "../ui/Button/styles";
 import TitleSection from "../ui/TitleSection";
 import {Link} from "gatsby";
+
+function typedKeys<T>(o: T): (keyof T)[] {
+    // type cast should be safe because that's what really Object.keys() does
+    return Object.keys(o) as (keyof T)[];
+}
 
 interface Props {
     calcName: string;
@@ -48,19 +52,6 @@ enum IncentiveType {
     freeRent = "Free Rent",
     discount = "Discount"
 }
-/*
-class InputClassObj {
-}
-class BuildingDimensions implements InputClassObj {
-}
-class RentFacts implements InputClassObj {
-}
-class Incentives implements InputClassObj {
-}
-class Commissions implements InputClassObj {
-}
-class TenantImprovementAllowance implements InputClassObj {
-}*/
 
 class RentData {
     periodTo: number | Date = 1
@@ -71,42 +62,249 @@ class RentData {
     totalRentPerPeriod: number = 0.0
 }
 
-class NnnCalculatorInputs {
-    unitSelect: BuildingSizeUnit = BuildingSizeUnit.squareFeet
-    totalSize: InputElObj = new InputElObj(`Size of Property (${this.unitSelect})`, "totalSize", "100000");
-    rentedSize: InputElObj = new InputElObj(`Amount Renting (${this.unitSelect})`, "rentedSize", "10000");
-    rentType: RentType = RentType.perSqFt
-    leaseStartDate?: Date = new Date() // TODO implement date selector
-    initialRent: InputElObj = new InputElObj(`Initial Rent (${this.rentType})`, "initialRent", "1.00");
-    escalationFreqInMonths: InputElObj = new InputElObj("Escalation Frequency In Months", "escalationFreqInMonths", "12");
-    escalationAmt: InputElObj = new InputElObj("Escalation Amount", "escalationAmt", "1.03");
-    escalationType: EscalationType = EscalationType.percentage
-    termLengthInMonths: InputElObj = new InputElObj("Term Length In Months", "termLengthInMonths", "60");
-    incentiveType: IncentiveType = IncentiveType.freeRent; // TODO implement dropdown
-    discountPercent: InputElObj = new InputElObj("Discount Percent", "discountPercent", "100");
-    discountLength: InputElObj = new InputElObj("Discount Length", "discountLength", "1");
-    escalationOption: EscalationOption = EscalationOption.option1 // TODO implement dropdown
+interface ICalcData {
+    unitSelect: BuildingSizeUnit
+    rentType: RentType
+    leaseStartDate?: Date
+    escalationType: EscalationType
+    incentiveType: IncentiveType // TODO implement dropdown
+    escalationOption: EscalationOption // TODO implement dropdown
     // TODO get units for Expenses
-    managementFeePercentage: InputElObj = new InputElObj("Management Fee Percentage", "managementFeePercentage", "1.03");
-    commonAreaMaintenance: InputElObj = new InputElObj("Common Area Maintenance", "commonAreaMaintenance", "40000");
-    insurance: InputElObj = new InputElObj("Insurance", "insurance", "30000");
-    taxes: InputElObj = new InputElObj("Taxes", "taxes", "60000");
-    listingCommision: InputElObj = new InputElObj("Listing Commission", "listingCommission", "2.5");
-    procuringCommission: InputElObj = new InputElObj("Procuring Commission", "procuringCommission", "2.5");
-    tiaType: TIAType = TIAType.perSqFt
-    tia: InputElObj = new InputElObj(`Tenant Improvement Allowance (${this.tiaType})`, "tia", "5.00");
+    tiaType: TIAType
+    totalSize?: number
+    rentedSize?: number
+    initialRent?: number
+    escalationFreqInMonths?: number
+    escalationAmt?: number
+    termLengthInMonths?: number
+    discountPercent?: number
+    discountLength?: number
+    managementFeePercentage?: number
+    commonAreaMaintenance?: number
+    insurance?: number
+    taxes?: number
+    listingCommission?: number
+    procuringCommission?: number
+    tia?: number
+}
+// Makes ICalcData required
+interface ValidatedCalcData extends ICalcData{
+    commonAreaMaintenance: number;
+    discountLength: number;
+    discountPercent: number;
+    escalationAmt: number;
+    escalationFreqInMonths: number;
+    initialRent: number;
+    insurance: number;
+    managementFeePercentage: number ;
+    listingCommission: number;
+    procuringCommission: number ;
+    rentedSize: number;
+    taxes: number;
+    termLengthInMonths: number;
+    tia: number ;
+    totalSize: number;
+}
 
+class DefaultCalcData implements ValidatedCalcData {
+    commonAreaMaintenance: number = 30000;
+    discountLength: number = 1;
+    discountPercent: number = 100;
+    escalationAmt: number = 1.03;
+    escalationFreqInMonths: number = 12;
+    initialRent: number = 1.00;
+    insurance: number = 30000;
+    managementFeePercentage: number = 1.03;
+    listingCommission: number = 0.025;
+    procuringCommission: number = 0.025;
+    rentedSize: number = 10000;
+    taxes: number = 60000;
+    termLengthInMonths: number = 60;
+    tia: number = 50000;
+    totalSize: number = 100000;
+    escalationOption: EscalationOption = EscalationOption.option1;
+    escalationType: EscalationType = EscalationType.percentage;
+    incentiveType: IncentiveType = IncentiveType.freeRent;
+    rentType: RentType = RentType.perSqFt;
+    tiaType: TIAType = TIAType.fixed;
+    unitSelect: BuildingSizeUnit = BuildingSizeUnit.squareFeet;
+}
+
+class InputGroup extends React.Component {
+    private displayName: string;
+    private id: string;
+    private value: string;
+    private onUpdate: (ev:FormEvent<HTMLInputElement>) => string;
+
+    constructor(props: InputGroupProps) {
+        super(props);
+        this.displayName = props.displayName
+        this.id = props.id
+        this.value = props.stateValue
+        this.onUpdate = props.onUpdate
+    }
+
+    render(): React.ReactNode {
+        return (
+            <Styled.InputGroup inputGroupType={InputGroupType.half}>
+                <Styled.Label>
+                    {this.displayName}
+                </Styled.Label>
+                <Styled.Input id={this.id} type={"text"} value={this.value} onChange={(ev: FormEvent<HTMLInputElement>) => { this.value = this.onUpdate(ev)}} />
+            </Styled.InputGroup>
+        );
+    }
+}
+
+interface NnnCalcState {
+    preparedOutput: JSX.Element
+    calcInputData: ICalcData
+}
+
+interface calcInput {
+    stateValue: string
+    displayName: string
+    id: string
+}
+
+interface InputGroupProps extends calcInput {
+    onUpdate: (ev:FormEvent<HTMLInputElement>) => string
+}
+
+// Adding this as an example of how to create a class component
+export class NnnCalculator extends React.Component {
+    private output = React.createRef<HTMLDivElement>();
+    private calcInputs: calcInput[];
+    state: NnnCalcState
+
+    constructor(public props: Props) {
+        super(props);
+        this.state = {
+            preparedOutput: <div>What the...</div>,
+            calcInputData: new DefaultCalcData(),
+        }
+
+        this.calcInputs = [
+            {stateValue: this.state.calcInputData.totalSize?.toString() ?? "", displayName: "Size of Property (TODOUNITSELECT)", id: "totalSize" },
+            {stateValue: this.state.calcInputData.rentedSize?.toString() ?? "", displayName: "Amount Renting (TODOUNITSELECT)", id: "rentedSize" },
+            {stateValue: this.state.calcInputData.initialRent?.toString() ?? "", displayName: "Initial Rent (TODOUNITSELECT)", id: "initialRent" },
+            {stateValue: this.state.calcInputData.escalationFreqInMonths?.toString() ?? "", displayName: "Escalation Frequency In Months", id: "escalationFreqInMonths" },
+            {stateValue: this.state.calcInputData.escalationAmt?.toString() ?? "", displayName: "Escalation Amount", id: "escalationAmt" },
+            {stateValue: this.state.calcInputData.termLengthInMonths?.toString() ?? "", displayName: "Term Length In Months", id: "termLengthInMonths" },
+            {stateValue: this.state.calcInputData.discountPercent?.toString() ?? "", displayName: "Discount Percent", id: "discountPercent" },
+            {stateValue: this.state.calcInputData.discountLength?.toString() ?? "", displayName: "Discount Length", id: "discountLength" },
+            {stateValue: this.state.calcInputData.managementFeePercentage?.toString() ?? "", displayName: "Management Fee Percentage", id: "managementFeePercentage" },
+            {stateValue: this.state.calcInputData.commonAreaMaintenance?.toString() ?? "", displayName: "Common Area Maintenance", id: "commonAreaMaintenance" },
+            {stateValue: this.state.calcInputData.insurance?.toString() ?? "", displayName: "Insurance", id: "insurance" },
+            {stateValue: this.state.calcInputData.taxes?.toString() ?? "", displayName: "Taxes", id: "taxes" },
+            {stateValue: this.state.calcInputData.listingCommission?.toString() ?? "", displayName: "Listing Commission", id: "listingCommission" },
+            {stateValue: this.state.calcInputData.procuringCommission?.toString() ?? "", displayName: "Procuring Commission", id: "procuringCommission" },
+            {stateValue: this.state.calcInputData.tia?.toString() ?? "", displayName: "Tenant Improvement Allowance (TODOUNITSELECT)", id: "tia" },
+        ]
+    }
+
+    // Anything in this function happens after the Elements are added to the DOM
+    // i.e. the refs are added to `input1`, `input2`, ect.
+    componentDidMount() {
+        this.setState({ preparedOutput: <>Wah</> })
+    }
+
+    validateInputs(val: string, min?: number, max?: number): number | undefined {
+        if (val.trim() !== "") {
+            try {
+                const retVal = parseFloat(val);
+                return isNaN(retVal) ? undefined : retVal;
+            } catch (e) {}
+        }
+        return undefined;
+    }
+
+    getUpdatedInputCalcData(key: string, val: number | undefined): ICalcData {
+        const updateState = {...this.state.calcInputData}
+        // @ts-ignore
+        updateState[key] = val;
+        return updateState
+    }
+
+    getUpdatedValidatedData(): ValidatedCalcData | undefined {
+        const updatedInputData = {...this.state.calcInputData};
+        let shouldReturnData = true
+
+        typedKeys(updatedInputData).forEach((key) => {
+            // @ts-ignore
+            const inputVal = updatedInputData[key];
+            if (inputVal === undefined) {
+                shouldReturnData = false
+                return;
+            }
+        })
+        try {
+            return shouldReturnData ? this.state.calcInputData as ValidatedCalcData : undefined;
+        } catch (e) {
+            // TODO error log
+            return undefined
+        }
+    }
+
+    validateInputsUpdateState(ev: FormEvent<HTMLInputElement>): string {
+        const num = this.validateInputs(ev.currentTarget.value.trim());
+        const updatedCalcData = this.getUpdatedInputCalcData(ev.currentTarget.id, num);
+        const updateState = {...this.state, calcInputData: {...updatedCalcData}}
+        this.setState(updateState);
+        return num !== undefined ? num.toString() : "";
+    }
+
+    submitFn = () => {
+        this.prepareOutput().then((val) => {
+            this.setState({preparedOutput: val});
+        });
+    }
+
+    // Need render function in order for class component to work
+    render() {
+        return (<Container section={false}>
+            <TitleSection title={"Real Estate Calculator"} subtitle={this.props.calcName} />
+            <Content>
+                <InputWrapper>
+                    {
+                        this.calcInputs.map((props: calcInput) => {
+                            const inputProps: InputGroupProps = {...props, onUpdate: this.validateInputsUpdateState}
+                            return (<InputGroup key={inputProps.id} {...inputProps} />)
+                        })
+                    }
+                </InputWrapper>
+
+                <Link to={"#"} onClick={(ev) => { ev.preventDefault(); this.submitFn() }}>
+                    <Button primary>{"Calculator"}</Button>
+                </Link>
+
+                <span ref={this.output} style={{display: "block"}}>{this.state.preparedOutput}</span>
+            </Content>
+        </Container>)
+    }
+
+
+    /*********************************************************************
+     *
+     *                      Business Logic Below:
+     *
+     *********************************************************************/
     getRentSchedule(): RentData[] {
         const data: RentData[] = [];
+        const validatedCalcData = this.getUpdatedValidatedData()
+
+        if (validatedCalcData === undefined) {
+            return [];
+        }
 
         // Rent discount is in the beginning
-        if (this.escalationOption === EscalationOption.option1) {
+        if (validatedCalcData.escalationOption === EscalationOption.option1) {
             const curData = new RentData();
-            let currentRentPerSqFt = parseInt(this.initialRent.getValue());
-            const currentRentedSize = parseInt(this.rentedSize.getValue());
-            const escalationAmount = parseFloat(this.escalationAmt.getValue());
+            let currentRentPerSqFt = validatedCalcData.initialRent
+            const currentRentedSize = validatedCalcData.rentedSize
+            const escalationAmount = validatedCalcData.escalationAmt
             curData.periodFrom = 1
-            curData.periodTo = parseInt(this.discountLength.getValue())
+            curData.periodTo = validatedCalcData.discountLength
             curData.monthsLength = curData.periodFrom - curData.periodTo + 1
             curData.monthlyRentPerSqFt = 0;
             curData.monthlyBaseRent = 0;
@@ -116,168 +314,38 @@ class NnnCalculatorInputs {
 
             let currentMonth = curData.periodTo + 1;
 
-            while (currentMonth < parseInt(this.termLengthInMonths.getValue())) {
+            while (currentMonth < validatedCalcData.termLengthInMonths) {
                 const moreData = new RentData();
                 // Coming from adding a discount; (1-0) % 12 == 0; 13-1 % 12 == 0; }=> start of a period
                 if ((currentMonth - 1) % 12 !== 0) {
                     moreData.periodFrom = currentMonth;
                     moreData.periodTo = currentMonth + (12 - (currentMonth % 12));
                 } else {
-                    currentRentPerSqFt = this.escalationType === EscalationType.fixed ?
-                                        currentRentPerSqFt + escalationAmount :
-                                        currentRentPerSqFt * escalationAmount;
+                    currentRentPerSqFt = validatedCalcData.escalationType === EscalationType.fixed ?
+                        currentRentPerSqFt + escalationAmount :
+                        currentRentPerSqFt * escalationAmount;
 
                     moreData.periodFrom = currentMonth;
                     moreData.periodTo = currentMonth + 11;
                 }
-                    moreData.monthsLength = moreData.periodTo - moreData.periodFrom + 1;
-                    moreData.monthlyBaseRent = currentRentPerSqFt * currentRentedSize;
-                    moreData.monthlyRentPerSqFt = currentRentPerSqFt;
-                    moreData.totalRentPerPeriod = moreData.monthsLength * moreData.monthlyBaseRent;
-                    data.push(moreData);
+                moreData.monthsLength = moreData.periodTo - moreData.periodFrom + 1;
+                moreData.monthlyBaseRent = currentRentPerSqFt * currentRentedSize;
+                moreData.monthlyRentPerSqFt = currentRentPerSqFt;
+                moreData.totalRentPerPeriod = moreData.monthsLength * moreData.monthlyBaseRent;
+                data.push(moreData);
                 currentMonth = moreData.periodTo + 1;
             }
         }
         return data;
     }
-}
-
-enum InputType {
-    text = "text",
-    select = "select",
-    slider = "slider"
-}
-
-class InputElObj  {
-    displayName: string = ""
-    id: string = ""
-    inputType: InputType = InputType.text
-    validationFn: () => void = () => {}
-    placeholder: string = ""
-    defaultValue: string = ""
-    inputSize: InputGroupType = InputGroupType.half
-    inputRef: React.RefObject<HTMLInputElement> = React.createRef<HTMLInputElement>();
-    value: string = ""
-
-    constructor(displayName: string, id:string, defaultValue?: string, placeholder?: string, inputType?: InputType, inputSize?: InputGroupType, inputRef?: React.RefObject<HTMLInputElement>) {
-        this.displayName = displayName;
-        this.id = id;
-        this.defaultValue = defaultValue !== undefined ? defaultValue : this.defaultValue;
-        this.inputType = inputType !== undefined ? inputType : this.inputType;
-        this.placeholder = placeholder !== undefined ? placeholder : this.placeholder;
-        this.inputSize = inputSize !== undefined ? inputSize : this.inputSize;
-        this.inputRef = inputRef !== undefined ? inputRef : this.inputRef;
-    }
-
-    public getValue(): string {
-        this.validationFn()
-        this.value = this.inputRef?.current?.value?? ""
-        return this.value;
-    }
-}
-
-interface InputGroupState {
-    inputValue: string
-}
-
-class InputGroup extends React.PureComponent {
-    private placeholder: string;
-    private defaultValue: string;
-    private displayName: string;
-    private id: string;
-    private inputType: InputType;
-    private inputSize: InputGroupType;
-    private inputRef: React.RefObject<HTMLInputElement> | null;
-    state: InputGroupState
-
-    constructor(props: InputElObj) {
-        super(props);
-        this.displayName = props.displayName
-        this.id = props.id
-        this.inputType = props.inputType
-        this.validationFn = props.validationFn
-        this.placeholder = props.placeholder
-        this.defaultValue = props.defaultValue
-        this.inputSize = props.inputSize !== undefined ? props.inputSize : InputGroupType.full
-        this.inputRef = props.inputRef
-        this.state = {inputValue: this.defaultValue}
-    }
-
-    validationFn(): void {}
-
-    componentDidMount() {
-        this.setState({inputValue: this.defaultValue});
-    }
-    handleChange = (e: FormEvent<HTMLInputElement>) => {
-        this.setState({inputValue: e.currentTarget.value});
-    }
-
-    onInputFn(ev:FormEvent<HTMLInputElement>): void {
-        if (this.inputRef !== null && this.inputRef.current !== null) {
-            console.log(`Input detected, shouldve updated`);
-            this.inputRef.current.value = ev.currentTarget.value;
-        } else {
-            console.log(`Input detected, but inputRef is null`);
-        }
-    }
-
-    render(): React.ReactNode {
-        return (
-            <Styled.InputGroup inputGroupType={this.inputSize}>
-                <Styled.Label>
-                    {this.displayName}
-                </Styled.Label>
-                <Styled.Input id={this.id} type={this.inputType} ref={this.inputRef} placeholder={this.placeholder} onChange={() => {this.validationFn()}}
-                              onInput={(ev:FormEvent<HTMLInputElement>) => { this.handleChange(ev) }} value={this.state.inputValue} />
-            </Styled.InputGroup>
-        );
-    }
-}
-
-const getInputJsxFromObject = (obj: InputElObj | ObjectType): JSX.Element[] => {
-    const buffer:JSX.Element[] = [];
-
-    for (let val of Object.values(obj)) {
-        if ((val as InputElObj).displayName !== undefined) {
-            buffer.push(getInputJsx(val as InputElObj));
-        }
-    }
-
-    return (buffer);
-}
-
-const getInputJsx = (props: InputElObj): JSX.Element => {
-    return (<InputGroup key={`inputGroup_${props.id}`} {...props}/>)
-}
-
-interface NnnCalcState {
-    preparedOutput: JSX.Element
-}
-
-// Adding this as an example of how to create a class component
-export class NnnCalculator extends React.Component {
-    private output = React.createRef<HTMLDivElement>();
-    private inputs: JSX.Element[];
-    private calcInputs: NnnCalculatorInputs;
-    state: NnnCalcState
-
-    constructor(public props: Props) {
-        super(props);
-        this.calcInputs = new NnnCalculatorInputs()
-        this.inputs = getInputJsxFromObject(this.calcInputs);
-        this.state = {
-            preparedOutput: <div>What the...</div>
-        }
-    }
-
-    // Anything in this function happens after the Elements are added to the DOM
-    // i.e. the refs are added to `input1`, `input2`, ect.
-    componentDidMount() {
-        this.setState({ preparedOutput: <>Wah</> })
-    }
 
     async prepareOutput(): Promise<JSX.Element> {
-        const rentData = this.calcInputs.getRentSchedule();
+        const rentData = this.getRentSchedule();
+        const validatedCalcData = this.getUpdatedValidatedData()
+        if (validatedCalcData === undefined) {
+            return (<div>Validated Data is incorrect!</div>);
+        }
+
         let outText: JSX.Element[] = [];
         let totalRent = 0.0;
         const localeOptions = { style: 'currency', currency: 'USD', minimumIntegerDigits: 1, minimumFractionDigits: 2, maximumFractionDigits: 2, };
@@ -295,11 +363,10 @@ export class NnnCalculator extends React.Component {
             outText.push(row);
             totalRent += data.totalRentPerPeriod;
         })
-        console.log(totalRent)
 
-        const percentRented = parseFloat(this.calcInputs.rentedSize.getValue()) / parseFloat(this.calcInputs.totalSize.getValue())
+        const percentRented = validatedCalcData.rentedSize / validatedCalcData.totalSize
         // Expenses calculation:
-        const cam = parseInt(this.calcInputs.commonAreaMaintenance.getValue());
+        const cam = validatedCalcData.commonAreaMaintenance;
         const annualCam = cam * percentRented
 
 
@@ -344,45 +411,11 @@ export class NnnCalculator extends React.Component {
                         <td>{annualCam.toLocaleString("en-US", localeOptions)}</td>
                         <td>{(cam / 12.0).toLocaleString("en-US", localeOptions)}</td>
                         <td>{((cam / 12.0) * percentRented).toLocaleString("en-US", localeOptions)}</td>
-                        <td>{((((cam / 12.0) * percentRented)) / parseFloat(this.calcInputs.rentedSize.getValue())).toLocaleString("en-US", localeOptions)}</td>
+                        <td>{((((cam / 12.0) * percentRented)) / validatedCalcData.rentedSize).toLocaleString("en-US", localeOptions)}</td>
                     </tr>
                     </tbody>
                 </table>
             </>
         )
-    }
-
-    submitFn = () => {
-        const sharePercent = parseFloat(this.calcInputs.rentedSize.getValue()) / parseFloat(this.calcInputs.totalSize.getValue());
-        const monthlyRent = parseFloat(this.calcInputs.initialRent.getValue())
-
-        const totalRentMonths = parseInt(this.calcInputs.termLengthInMonths.getValue()) + (this.calcInputs.escalationOption === EscalationOption.option2 ? 1 : 0);
-
-        const out = this.prepareOutput();
-
-        out.then((val) => {
-            console.log(val);
-            console.log(this.state.preparedOutput);
-            this.setState({preparedOutput: val});
-            console.log(this.state.preparedOutput);
-        });
-    }
-
-    // Need render function in order for class component to work
-    render() {
-        return (<Container section={false}>
-            <TitleSection title={"Real Estate Calculator"} subtitle={this.props.calcName} />
-            <Content>
-                <InputWrapper>
-                    {this.inputs}
-                </InputWrapper>
-
-                <Link to={"#"} onClick={(ev) => { ev.preventDefault(); this.submitFn() }}>
-                    <Button primary>{"Calculator"}</Button>
-                </Link>
-
-                <span ref={this.output} style={{display: "block"}}>{this.state.preparedOutput}</span>
-            </Content>
-        </Container>)
     }
 }
