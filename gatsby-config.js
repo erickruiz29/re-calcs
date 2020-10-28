@@ -40,11 +40,11 @@ module.exports = {
     {
       resolve: `gatsby-plugin-manifest`,
       options: {
-        name: `gatsby-personal-website-starter`,
-        short_name: `starter`,
+        name: `re-calcs`,
+        short_name: `re-calcs`,
         start_url: `/`,
-        background_color: `#81e6d9`,
-        theme_color: `#81e6d9`,
+        background_color: `#6218cb`,
+        theme_color: `#6218cb`,
         display: `minimal-ui`,
         icon: `src/assets/images/gatsby-icon.png`
       }
