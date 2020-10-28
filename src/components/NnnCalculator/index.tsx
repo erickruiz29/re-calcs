@@ -740,7 +740,7 @@ export class NnnCalculator extends React.Component {
                 *
                 */}
                 <div style={{height: "50px", width: "100%", display: "block"}}> </div>
-                <h1 style={{fontSize: "3em", color: "#333", textAlign: "left"}}>Rent Table</h1>
+                <h1 style={{fontSize: "3em", color: "#333", textAlign: "left"}}>Basic Info</h1>
                 <table style={{width: "100%", textAlign: "left"}}>
                     <tbody>
                     <tr>
