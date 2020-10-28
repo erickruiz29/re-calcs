@@ -16,6 +16,16 @@ export function getStringOrEmpty(input: number | undefined): string {
     return input?.toString() ?? "";
 }
 
+export function formatMoney(input: number): string {
+    const localeOptions = { style: 'currency', currency: 'USD', minimumIntegerDigits: 1, minimumFractionDigits: 2, maximumFractionDigits: 2, };
+    return input.toLocaleString("en-US", localeOptions)
+}
+
+export function formatNumber(input: number): string {
+    const localOptions = { style: 'decimal', minimumIntegerDigits: 1, maximumFractionDigits: 0 };
+    return input.toLocaleString("en-US", localOptions);
+}
+
 interface Props {
     calcName: string;
 }
@@ -58,22 +68,13 @@ enum IncentiveType {
     discount = "Discount"
 }
 
-class RentData {
-    periodTo: number | Date = 1
-    periodFrom: number | Date = 1
-    monthsLength: number = 1
-    monthlyBaseRent: number = 0.0
-    monthlyRentPerSqFt: number = 0.0
-    totalRentPerPeriod: number = 0.0
-}
-
 interface ICalcData {
     unitSelect: BuildingSizeUnit
     rentType: RentType
     leaseStartDate?: Date
     escalationType: EscalationType
     incentiveType: IncentiveType // TODO implement dropdown
-    escalationOption: EscalationOption // TODO implement dropdown
+    escalationOption: EscalationOption // TODO implement dropdown; NEED TO MAKE OPTIONAL
     // TODO get units for Expenses
     tiaType: TIAType
     totalSize?: number
@@ -112,14 +113,14 @@ interface ValidatedCalcData extends ICalcData{
 }
 
 class DefaultCalcData implements ValidatedCalcData {
-    commonAreaMaintenance: number = 30000;
+    commonAreaMaintenance: number = 40000;
     discountLength: number = 1;
     discountPercent: number = 100;
     escalationAmt: number = 1.03;
     escalationFreqInMonths: number = 12;
     initialRent: number = 1.00;
     insurance: number = 30000;
-    managementFeePercentage: number = 1.03;
+    managementFeePercentage: number = 0.03;
     listingCommission: number = 0.025;
     procuringCommission: number = 0.025;
     rentedSize: number = 10000;
@@ -191,6 +192,70 @@ enum ErrorType {
     intOnlyErr,
 }
 
+interface RentPeriodData {
+    periodTo: number
+    periodFrom: number
+    monthsLength: number
+    monthlyBaseRent: number
+    totalRentPerPeriod: number
+    monthlyRentPerSqFt: number
+}
+
+interface RentData {
+    rentPeriodData: RentPeriodData[]
+    netEffectiveRent: number
+    totalNetRent: number
+    totalTermLength: number
+}
+
+interface ExpenseData {
+    expenseName: string
+    bldgAnnual: number
+    proRataAnnual: number
+    bldgMonthly: number
+    proRataMonthly: number
+    monthlyPerUnit: number
+}
+
+interface ExpensesData {
+    expensesPeriodData: ExpenseData[]
+    proRataAnnualStartNetRent: number
+    proRataMonthlyStartNetRent: number
+    proRataAnnualGrossRent: number
+    proRataMonthlyGrossRent: number
+    proRataAnnualTotalExpenses: number
+    proRataMonthlyTotalExpenses: number
+    totalExpensesPerUnit: number
+    startingNetRentPerUnit: number
+    grossRentPerUnit: number
+
+}
+
+interface CommissionPeriodData {
+    considerationAmount: number
+    listingCommission: number
+    procuringCommission: number
+    totalCommissionPercent: number
+    totalCommissionAmount: number
+}
+
+interface CommissionData {
+    commissionPeriodData: CommissionPeriodData[]
+    totalListingCommission: number
+    totalProcuringCommission: number
+    totalCommission: number
+}
+
+interface CalculatedData {
+    rentData: RentData
+    expensesData: ExpensesData
+    commissionData: CommissionData
+    proportionateShare: number
+    tia: number
+    turnOverCosts: number
+    noiFullTerm: number
+}
+
 class InputError extends Map<string, Error[]> {}
 
 class Error {
@@ -247,7 +312,7 @@ export class NnnCalculator extends React.Component {
             {stateValue: getStringOrEmpty(this.state.calcInputData.termLengthInMonths), displayName: "Term Length In Months", id: "termLengthInMonths", min: "1" },
             {stateValue: getStringOrEmpty(this.state.calcInputData.discountPercent), displayName: "Discount Percent", id: "discountPercent", min: "1", max: "100" },
             {stateValue: getStringOrEmpty(this.state.calcInputData.discountLength), displayName: "Discount Length", id: "discountLength", min: "1", max: `${this.state.calcInputData.termLengthInMonths}` },
-            {stateValue: getStringOrEmpty(this.state.calcInputData.managementFeePercentage), displayName: "Management Fee Percentage", id: "managementFeePercentage", min: "0", max: "100" },
+            {stateValue: getStringOrEmpty(this.state.calcInputData.managementFeePercentage), displayName: "Management Fee Percentage", id: "managementFeePercentage", min: "0", max: "1" },
             {stateValue: getStringOrEmpty(this.state.calcInputData.commonAreaMaintenance), displayName: "Common Area Maintenance", id: "commonAreaMaintenance", min: "0", max: "100" },
             {stateValue: getStringOrEmpty(this.state.calcInputData.insurance), displayName: "Insurance", id: "insurance", min: "0" },
             {stateValue: getStringOrEmpty(this.state.calcInputData.taxes), displayName: "Taxes", id: "taxes", min: "0"},
@@ -410,33 +475,43 @@ export class NnnCalculator extends React.Component {
      *                      Business Logic Below:
      *
      *********************************************************************/
-    getRentSchedule(): RentData[] {
-        const data: RentData[] = [];
+    getRentData(): RentData | undefined {
+        const data: RentData = {rentPeriodData: [], netEffectiveRent: 0, totalNetRent: 0, totalTermLength: 0};
         const validatedCalcData = this.getUpdatedValidatedData()
 
         if (validatedCalcData === undefined) {
-            return [];
+            return undefined;
         }
 
         // Rent discount is in the beginning
         if (validatedCalcData.escalationOption === EscalationOption.option1) {
-            const curData = new RentData();
+            data.totalTermLength = validatedCalcData.termLengthInMonths
+            const curData: RentPeriodData = {
+                periodFrom: 1,
+                periodTo: validatedCalcData.discountLength,
+                monthsLength: validatedCalcData.discountLength,
+                monthlyRentPerSqFt: 0,
+                monthlyBaseRent: 0,
+                totalRentPerPeriod: 0,
+            }
             let currentRentPerSqFt = validatedCalcData.initialRent
             const currentRentedSize = validatedCalcData.rentedSize
             const escalationAmount = validatedCalcData.escalationAmt
-            curData.periodFrom = 1
-            curData.periodTo = validatedCalcData.discountLength
-            curData.monthsLength = curData.periodFrom - curData.periodTo + 1
-            curData.monthlyRentPerSqFt = 0;
-            curData.monthlyBaseRent = 0;
-            curData.totalRentPerPeriod = 0;
 
-            data.push(curData);
+
+            data.rentPeriodData.push(curData);
 
             let currentMonth = curData.periodTo + 1;
 
             while (currentMonth < validatedCalcData.termLengthInMonths) {
-                const moreData = new RentData();
+                const moreData: RentPeriodData = {
+                    periodFrom: 1,
+                    periodTo: validatedCalcData.discountLength,
+                    monthsLength: validatedCalcData.discountLength,
+                    monthlyRentPerSqFt: 0,
+                    monthlyBaseRent: 0,
+                    totalRentPerPeriod: 0,
+                }
                 // Coming from adding a discount; (1-0) % 12 == 0; 13-1 % 12 == 0; }=> start of a period
                 if ((currentMonth - 1) % 12 !== 0) {
                     moreData.periodFrom = currentMonth;
@@ -453,70 +528,287 @@ export class NnnCalculator extends React.Component {
                 moreData.monthlyBaseRent = currentRentPerSqFt * currentRentedSize;
                 moreData.monthlyRentPerSqFt = currentRentPerSqFt;
                 moreData.totalRentPerPeriod = moreData.monthsLength * moreData.monthlyBaseRent;
-                data.push(moreData);
+                data.rentPeriodData.push(moreData);
+                data.totalNetRent += moreData.totalRentPerPeriod
                 currentMonth = moreData.periodTo + 1;
             }
         }
+        data.netEffectiveRent = data.totalNetRent / validatedCalcData.termLengthInMonths / validatedCalcData.rentedSize;
         return data;
     }
 
-    async prepareOutput(): Promise<JSX.Element> {
-        const rentData = this.getRentSchedule();
-        const validatedCalcData = this.getUpdatedValidatedData()
-        if (validatedCalcData === undefined) {
-            return (<div>Validated Data is incorrect!</div>);
+    getCommissionData(rentData: RentData, listingCommissionPercentage: number, procuringCommissionPercentage: number): CommissionData | undefined {
+        const commissionData:CommissionData = {commissionPeriodData: [], totalCommission: 0, totalProcuringCommission: 0, totalListingCommission: 0}
+        rentData.rentPeriodData.forEach((val, ind) => {
+            const listingComm = listingCommissionPercentage * val.totalRentPerPeriod
+            const procuringComm = listingCommissionPercentage * val.totalRentPerPeriod
+            const currData: CommissionPeriodData = {
+                considerationAmount: val.totalRentPerPeriod,
+                listingCommission: listingComm,
+                procuringCommission: procuringComm,
+                totalCommissionAmount: listingComm + procuringComm,
+                totalCommissionPercent: listingCommissionPercentage + procuringCommissionPercentage
+            }
+            commissionData.commissionPeriodData.push(currData);
+            commissionData.totalListingCommission += listingComm
+            commissionData.totalProcuringCommission += procuringComm
+        })
+        commissionData.totalCommission += commissionData.totalListingCommission + commissionData.totalProcuringCommission
+        return commissionData
+    }
+
+    getExpensesData(rentedSize: number, startingRentAmt: number, proportionateShare: number, managementFee: number, restExpenses: number[], restExpensesNames: string[]): ExpensesData | undefined {
+        const expensesPeriodData: ExpenseData[] = []
+
+        let proRataAnnualSum = 0
+        let proRataMonthlySum = 0
+
+        restExpenses.forEach((val, ind) => {
+            const proRataMonthly = (val / 12) * proportionateShare
+            expensesPeriodData.push({
+                expenseName: restExpensesNames[ind],
+                bldgAnnual: val,
+                proRataAnnual: val * proportionateShare,
+                bldgMonthly: val / 12,
+                proRataMonthly: proRataMonthly ,
+                monthlyPerUnit: proRataMonthly / rentedSize,
+            })
+            proRataMonthlySum += proRataMonthly
+            proRataAnnualSum += val * proportionateShare
+        })
+
+        const managementProRateMonthly = (proRataMonthlySum + startingRentAmt * rentedSize) * managementFee
+
+        expensesPeriodData.push({
+            expenseName: "Management Fee",
+            bldgAnnual: 0,
+            proRataAnnual: managementProRateMonthly * 12,
+            bldgMonthly: 0,
+            proRataMonthly: managementProRateMonthly,
+            monthlyPerUnit: managementProRateMonthly / rentedSize,
+        })
+
+        proRataMonthlySum += managementProRateMonthly
+        proRataAnnualSum += managementProRateMonthly * 12
+
+        return {
+            expensesPeriodData: expensesPeriodData,
+            totalExpensesPerUnit: proRataMonthlySum / rentedSize,
+            grossRentPerUnit: startingRentAmt + (proRataMonthlySum / rentedSize),
+            startingNetRentPerUnit: startingRentAmt,
+            proRataAnnualTotalExpenses: proRataAnnualSum,
+            proRataAnnualGrossRent: proRataAnnualSum + (startingRentAmt * rentedSize * 12),
+            proRataAnnualStartNetRent: startingRentAmt * rentedSize * 12,
+            proRataMonthlyTotalExpenses: proRataMonthlySum,
+            proRataMonthlyGrossRent: proRataMonthlySum  ,
+            proRataMonthlyStartNetRent: startingRentAmt * rentedSize
+        }
+    }
+
+    getCalculatedData(): CalculatedData | undefined {
+        const validatedData = this.getUpdatedValidatedData()
+        if (validatedData === undefined) {
+            return undefined
         }
 
-        let outText: JSX.Element[] = [];
-        let totalRent = 0.0;
-        const localeOptions = { style: 'currency', currency: 'USD', minimumIntegerDigits: 1, minimumFractionDigits: 2, maximumFractionDigits: 2, };
+        const rentData = this.getRentData();
+        if (rentData === undefined) {
+            return undefined
+        }
+        const proportionateShare = validatedData.rentedSize / validatedData.totalSize
+        const commissionData = this.getCommissionData(rentData, validatedData.listingCommission, validatedData.procuringCommission);
+        const expensesData = this.getExpensesData(
+            validatedData.rentedSize,
+            validatedData.initialRent,
+            proportionateShare,
+            validatedData.managementFeePercentage,
+            [validatedData.commonAreaMaintenance, validatedData.insurance, validatedData.taxes],
+            ["Common Area Maintenance (CAM)", "Insurance", "Taxes"]
+        );
+
+        if (commissionData === undefined || expensesData === undefined) {
+            // TODO ERROR CALCULATING
+            return undefined
+
+        } else {
+            const turnOverCosts = validatedData.tia + commissionData.totalCommission
+            const noiFullTerm = rentData.totalNetRent - turnOverCosts
+            return {
+                commissionData: commissionData,
+                expensesData: expensesData,
+                rentData: rentData,
+                noiFullTerm: noiFullTerm,
+                proportionateShare: proportionateShare,
+                tia: validatedData.tia,
+                turnOverCosts: turnOverCosts,
+            }
+        }
+    }
+
+    async prepareOutput(): Promise<JSX.Element> {
+        const calculatedData = this.getCalculatedData()
+        const validatedCalcData = this.getUpdatedValidatedData()
+        if (calculatedData === undefined || validatedCalcData === undefined) {
+            return (<div style={{color: "red", fontSize: "3em"}}> "Error outputing calculated data"</div>)
+        }
+
+        const rentData = calculatedData.rentData.rentPeriodData;
+        let rentDataJsx: JSX.Element[] = [];
+
         rentData.forEach((data, index) => {
             const row = (
-                <tr key={index}>
+                <tr key={`rentTable_${index}`}>
                     <td>{data.periodFrom}</td>
                     <td>{data.periodTo}</td>
                     <td>{data.monthsLength}</td>
-                    <td>{data.monthlyRentPerSqFt.toLocaleString("en-US", localeOptions)}</td>
-                    <td>{data.monthlyBaseRent.toLocaleString("en-US", localeOptions)}</td>
-                    <td>{data.totalRentPerPeriod.toLocaleString("en-US", localeOptions)}</td>
+                    <td>{formatMoney(data.monthlyRentPerSqFt)}</td>
+                    <td>{formatMoney(data.monthlyBaseRent)}</td>
+                    <td>{formatMoney(data.totalRentPerPeriod)}</td>
                 </tr>
             )
-            outText.push(row);
-            totalRent += data.totalRentPerPeriod;
+            rentDataJsx.push(row);
         })
 
-        const percentRented = validatedCalcData.rentedSize / validatedCalcData.totalSize
-        // Expenses calculation:
-        const cam = validatedCalcData.commonAreaMaintenance;
-        const annualCam = cam * percentRented
+        const expensesData = calculatedData.expensesData.expensesPeriodData;
+        let expensesJsx: JSX.Element[] = [];
 
+        expensesData.forEach((data, index) => {
+            const row = (
+                <tr key={`expenses_${index}`}>
+                    <td>{data.expenseName}</td>
+                    <td>{data.bldgAnnual !== 0 ? formatMoney(data.bldgAnnual) : ""}</td>
+                    <td>{formatMoney(data.proRataAnnual)}</td>
+                    <td>{data.bldgMonthly !== 0 ? formatMoney(data.bldgMonthly) : ""}</td>
+                    <td>{formatMoney(data.proRataMonthly)}</td>
+                    <td>{formatMoney(data.monthlyPerUnit)}</td>
+                </tr>
+            )
+            expensesJsx.push(row);
+        })
+
+        expensesJsx.push((<tr>
+            <th>Total Expenses</th>
+            <td> </td>
+            <td>{formatMoney(calculatedData.expensesData.proRataAnnualTotalExpenses)}</td>
+            <td> </td>
+            <td>{formatMoney(calculatedData.expensesData.proRataMonthlyTotalExpenses)}</td>
+            <td>{formatMoney(calculatedData.expensesData.totalExpensesPerUnit)}</td>
+        </tr>))
+
+        expensesJsx.push((<tr>
+            <th>Starting Net Rent</th>
+            <td> </td>
+            <td>{formatMoney(calculatedData.expensesData.proRataAnnualStartNetRent)}</td>
+            <td> </td>
+            <td>{formatMoney(calculatedData.expensesData.proRataMonthlyStartNetRent)}</td>
+            <td>{formatMoney(calculatedData.expensesData.startingNetRentPerUnit)}</td>
+        </tr>))
+
+        expensesJsx.push((<tr>
+            <th>Gross Rent</th>
+            <td> </td>
+            <td>{formatMoney(calculatedData.expensesData.proRataAnnualGrossRent)}</td>
+            <td> </td>
+            <td>{formatMoney(calculatedData.expensesData.proRataMonthlyGrossRent)}</td>
+            <td>{formatMoney(calculatedData.expensesData.grossRentPerUnit)}</td>
+        </tr>))
+
+        const commissionsData = calculatedData.commissionData.commissionPeriodData;
+        let commissionJsx: JSX.Element[] = []
+
+        commissionsData.forEach((data, index) => {
+            const row = (
+                <tr key={`commission_${index}`}>
+                    <td>{index}</td>
+                    <td>{data.considerationAmount}</td>
+                    <td>{validatedCalcData.listingCommission}%</td>
+                    <td>{formatMoney(data.listingCommission)}</td>
+                    <td>{validatedCalcData.procuringCommission}%</td>
+                    <td>{formatMoney(data.procuringCommission)}</td>
+                    <td>{data.totalCommissionPercent}%</td>
+                    <td>{formatMoney(data.totalCommissionAmount)}</td>
+                </tr>
+            )
+            commissionJsx.push(row);
+        })
 
         return (
             <>
-                <h1>Rent Table</h1>
-                <table style={{width: "100%"}}>
+                {/*
+                *
+                *   Basic Info
+                *
+                */}
+                <div style={{height: "50px", width: "100%", display: "block"}}> </div>
+                <h1 style={{fontSize: "3em", color: "#333", textAlign: "left"}}>Rent Table</h1>
+                <table style={{width: "100%", textAlign: "left"}}>
+                    <tbody>
+                    <tr>
+                        <th>Size of Building/Project:</th>
+                        <th>Size of Unit Rented:</th>
+                        <th>Proportionate Share:</th>
+                        <th>Start Rent Amount (Per Square Feet):</th>
+                        <th>Start Rent Amount (Per Month):</th>
+                        <th>Escalation Frequency (Months):</th>
+                        <th>Escalation Amount (%):</th>
+                        <th>Total Term Length (Months):</th>
+                    </tr>
+                    <tr>
+                        <td>{formatNumber(validatedCalcData.totalSize)}</td>
+                        <td>{formatNumber(validatedCalcData.rentedSize)}</td>
+                        <td>{(validatedCalcData.rentedSize / validatedCalcData.totalSize) * 100 }%</td>
+                        <td>{formatMoney(validatedCalcData.initialRent)}</td>
+                        <td>{formatMoney(validatedCalcData.initialRent * validatedCalcData.rentedSize)}</td>
+                        <td>{validatedCalcData.escalationFreqInMonths}</td>
+                        <td>{validatedCalcData.escalationAmt}</td>
+                        <td>{calculatedData.rentData.totalTermLength}</td>
+                    </tr>
+                    </tbody>
+                </table>
+                {/*
+                *
+                *   Rent Table
+                *
+                */}
+                <div style={{height: "50px", width: "100%", display: "block"}}> </div>
+                <h1 style={{fontSize: "3em", color: "#333", textAlign: "left"}}>Rent Table</h1>
+                <table style={{width: "100%", textAlign: "left"}}>
                     <tbody>
                         <tr>
-                            <td>Period From:</td>
-                            <td>Period To:</td>
-                            <td>Months Length:</td>
-                            <td>Monthly Rent Per SqFt:</td>
-                            <td>Monthly Base Rent:</td>
-                            <td>Total Rent Per Period:</td>
+                            <th>Period From:</th>
+                            <th>Period To:</th>
+                            <th>Months Length:</th>
+                            <th>Monthly Rent Per SqFt:</th>
+                            <th>Monthly Base Rent:</th>
+                            <th>Total Rent Per Period:</th>
                         </tr>
-                        {outText}
+                        {rentDataJsx}
                         <tr>
                             <td>&nbsp;</td>
                             <td>&nbsp;</td>
                             <td>&nbsp;</td>
                             <td>&nbsp;</td>
-                            <td>Total Rent for Term:</td>
-                            <td>{totalRent.toLocaleString("en-US", localeOptions)}</td>
+                            <th>Net Effective Rent (NER)</th>
+                            <th>Total Rent for Term:</th>
+                        </tr>
+                        <tr>
+                            <td>&nbsp;</td>
+                            <td>&nbsp;</td>
+                            <td>&nbsp;</td>
+                            <td>&nbsp;</td>
+                            <td>{formatMoney(calculatedData.rentData.netEffectiveRent)}</td>
+                            <td>{formatMoney(calculatedData.rentData.totalNetRent)}</td>
                         </tr>
                     </tbody>
                 </table>
-                <h1>Expenses</h1>
-                <table>
+                {/*
+                *
+                *   Expenses
+                *
+                */}
+                <div style={{height: "50px", width: "100%", display: "block"}}> </div>
+                <h1 style={{fontSize: "3em", color: "#333", textAlign: "left"}}>Expenses</h1>
+                <table style={{width: "100%", textAlign: "left"}}>
                     <tbody>
                     <tr>
                         <th>Monthly Expenses</th>
@@ -526,13 +818,88 @@ export class NnnCalculator extends React.Component {
                         <th>Pro-Rata Monthly Total</th>
                         <th>Monthly Per Sq. Ft.</th>
                     </tr>
+                        {expensesJsx}
+                    </tbody>
+                </table>
+                {/*
+                *
+                *   Commissions
+                *
+                */}
+                <div style={{height: "50px", width: "100%", display: "block"}}> </div>
+                <h1 style={{fontSize: "3em", color: "#333", textAlign: "left"}}>Commissions</h1>
+                <table style={{width: "100%", textAlign: "left"}}>
+                    <tbody>
                     <tr>
-                        <td>Common Area Maintenance (CAM)</td>
-                        <td>{cam.toLocaleString("en-US", localeOptions)}</td>
-                        <td>{annualCam.toLocaleString("en-US", localeOptions)}</td>
-                        <td>{(cam / 12.0).toLocaleString("en-US", localeOptions)}</td>
-                        <td>{((cam / 12.0) * percentRented).toLocaleString("en-US", localeOptions)}</td>
-                        <td>{((((cam / 12.0) * percentRented)) / validatedCalcData.rentedSize).toLocaleString("en-US", localeOptions)}</td>
+                        <th>Period:</th>
+                        <th>Total Consideration:</th>
+                        <th>Listing Commission (%):</th>
+                        <th>Listing Commission ($):</th>
+                        <th>Procuring Commission (%):</th>
+                        <th>Procuring Commission ($):</th>
+                        <th>Total Commissions (%):</th>
+                        <th>Total Commission ($):</th>
+                    </tr>
+                        {commissionJsx}
+                    <tr>
+                        <th>Total Net Rent:</th>
+                        <td>{formatMoney(calculatedData.rentData.totalNetRent)}</td>
+                        <th>Total Listing Commission:</th>
+                        <td>{formatMoney(calculatedData.commissionData.totalListingCommission)}</td>
+                        <th>Total Procuring Commission:</th>
+                        <td>{formatMoney(calculatedData.commissionData.totalProcuringCommission)}</td>
+                        <th>Grand Total Commissions:</th>
+                        <td>{formatMoney(calculatedData.commissionData.totalCommission)}</td>
+                    </tr>
+                    </tbody>
+                </table>
+                {/*
+                *
+                *   Tenant Improvement Allowance
+                *
+                */}
+                <div style={{height: "50px", width: "100%", display: "block"}}> </div>
+                <h1 style={{fontSize: "3em", color: "#333", textAlign: "left"}}>Tenant Improvement Allowance</h1>
+                <table style={{width: "100%", textAlign: "left"}}>
+                    <tbody>
+                    <tr>
+                        <th>Tenant Improvement Allowance:</th>
+                    </tr>
+                    <tr>
+                        <td>{formatMoney(calculatedData.tia)}</td>
+                    </tr>
+                    </tbody>
+                </table>
+                {/*
+                *
+                *   Lease Analysis
+                *
+                */}
+                <div style={{height: "50px", width: "100%", display: "block"}}> </div>
+                <h1 style={{fontSize: "3em", color: "#333", textAlign: "left"}}>Lease Analysis</h1>
+                <table style={{width: "100%", textAlign: "left"}}>
+                    <tbody>
+                    <tr>
+                        <th>Starting Rent</th>
+                        <th>NER</th>
+                        <th>Starting Gross Rent</th>
+                        <th>Lease Term</th>
+                        <th>Total Net Rent</th>
+                        <th>Commission</th>
+                        <th>TIA</th>
+                        <th>Turnover Costs</th>
+                        <th>NOI Full Term</th>
+                    </tr>
+                    <tr>
+                        <td>{formatMoney(validatedCalcData.initialRent)}</td>
+                        <td>{formatMoney(calculatedData.rentData.netEffectiveRent)}</td>
+                        <td>{formatMoney(calculatedData.expensesData.grossRentPerUnit)}</td>
+                        <td>{calculatedData.rentData.totalTermLength}</td>
+                        <td>{formatMoney(calculatedData.rentData.totalNetRent)}</td>
+                        <td>{formatMoney(calculatedData.commissionData.totalCommission)}</td>
+                        <td>{formatMoney(calculatedData.tia)}</td>
+                        <td>{formatMoney(calculatedData.turnOverCosts)}</td>
+                        <td>{formatMoney(calculatedData.noiFullTerm)}</td>
                     </tr>
                     </tbody>
                 </table>
